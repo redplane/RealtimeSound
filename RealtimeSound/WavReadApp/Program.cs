@@ -52,12 +52,14 @@ namespace WavReadApp
             //var soundPlayer = new  SoundPlayer();
             //soundPlayer.Stream = new MemoryStream();
             //soundPlayer.Load();
-
-            var buffer = new byte[100000];
+            
             var bufferedWaveProvider = new BufferedWaveProvider(new WaveFormat());
             bufferedWaveProvider.DiscardOnBufferOverflow = true;
-
             bufferedWaveProvider.BufferDuration = TimeSpan.FromSeconds(10);
+            bufferedWaveProvider.ReadFully = false;
+
+            var buffer = new byte[2048];
+
             //IWaveProvider provider = new RawSourceWaveStream(ms, new WaveFormat(48000, 16, 1));
             waveOut.Init(bufferedWaveProvider);
             waveOut.Play();
@@ -68,6 +70,7 @@ namespace WavReadApp
                 {
                     try
                     {
+                        
                         var iReadBytes = fileStream.Read(buffer, 0, buffer.Length);
                         if (iReadBytes < 1)
                         {
@@ -91,7 +94,7 @@ namespace WavReadApp
                         //    bIsStarted = true;
                         //}
 
-                        Thread.Sleep(TimeSpan.FromSeconds(1));
+                        //Thread.Sleep(TimeSpan.FromSeconds(5));
                     }
                     catch (Exception exception)
                     {

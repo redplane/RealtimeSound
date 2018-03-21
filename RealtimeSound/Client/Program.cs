@@ -2,6 +2,8 @@
 using System.Dynamic;
 using System.IO;
 using System.Media;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using WMPLib;
@@ -49,34 +51,39 @@ namespace Client
                     return;
                 }
 
-                var iPointer = 0;
-                var soundPlayer = new SoundPlayer();
-                soundPlayer.Stream = new MemoryStream();
+                var ipAddress = IPAddress.Any;
+                var iPort = 9003;
+                Console.WriteLine($"Connecting to port {iPort}");
+                
+                var tcpClient = new TcpClient();
+                tcpClient.Connect("127.0.0.1", iPort);
+                Console.WriteLine("Connected");
 
-                using (var fileStream = File.OpenRead(fullPath))
+                var networkStream = tcpClient.GetStream();
+                var broadcastingThread = new Thread(() =>
                 {
-                    while (true)
+                    var buffers = new byte[4 * 1000000];
+                    using (var fileStream = File.OpenRead(fullPath))
                     {
-                        var buffers = new byte[2048];
-                        iPointer = fileStream.Read(buffers, iPointer, buffers.Length);
-                        if (iPointer < 1)
+                        var iReadBytes = 0;
+                        while ((iReadBytes = fileStream.Read(buffers, 0, buffers.Length)) > 0)
                         {
-                            Console.WriteLine("Read complete");
-                            break;
+                            networkStream.Write(buffers, 0, iReadBytes);
+                            //networkStream.Flush();
+                            Console.WriteLine($"Sent {iReadBytes} bytes");
+                            Thread.Sleep(TimeSpan.FromSeconds(10));
                         }
 
-                        soundPlayer.Stream.Seek(0, SeekOrigin.Begin);
-                        soundPlayer.Stream.Write(buffers, 0, buffers.Length);
-                        //soundPlayer.Load();
-                        soundPlayer.Play();
-
-
-                        Thread.Sleep(TimeSpan.FromSeconds(5));
+                        Console.WriteLine("Reading");
+                        Console.ReadLine();
                     }
+                });
 
-                    Console.WriteLine("Reading");
-                    Console.ReadLine();
-                }
+                broadcastingThread.IsBackground = true;
+                broadcastingThread.Start();
+
+                Console.ReadLine();
+
             }
             catch (Exception exception)
             {
