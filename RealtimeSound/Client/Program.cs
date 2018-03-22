@@ -62,28 +62,31 @@ namespace Client
                 var networkStream = tcpClient.GetStream();
                 var broadcastingThread = new Thread(() =>
                 {
-                    var buffers = new byte[4 * 1000000];
-                    using (var fileStream = File.OpenRead(fullPath))
+                    for (var i = 0; i < 2; i++)
                     {
-                        var iReadBytes = 0;
-                        while ((iReadBytes = fileStream.Read(buffers, 0, buffers.Length)) > 0)
+                        var buffers = new byte[4 * 1000000];
+                        using (var fileStream = File.OpenRead(fullPath))
                         {
-                            networkStream.Write(buffers, 0, iReadBytes);
-                            //networkStream.Flush();
-                            Console.WriteLine($"Sent {iReadBytes} bytes");
-                            Thread.Sleep(TimeSpan.FromSeconds(10));
+                            var iReadBytes = 0;
+                            while ((iReadBytes = fileStream.Read(buffers, 0, buffers.Length)) > 0)
+                            {
+                                networkStream.Write(buffers, 0, iReadBytes);
+                                //networkStream.Flush();
+                                Console.WriteLine($"Sent {iReadBytes} bytes");
+                                Thread.Sleep(TimeSpan.FromSeconds(10));
+                            }
                         }
-
-                        Console.WriteLine("Reading");
-                        Console.ReadLine();
                     }
+
+
+                    Console.WriteLine("Reading");
                 });
 
                 broadcastingThread.IsBackground = true;
                 broadcastingThread.Start();
 
                 Console.ReadLine();
-
+                
             }
             catch (Exception exception)
             {

@@ -1,7 +1,9 @@
 ﻿using System;
 using System.CodeDom;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Media;
 using System.Net;
 using System.Net.Sockets;
@@ -35,7 +37,11 @@ namespace Server
         /// </summary>
         private const int BufferSize = 10;
 
+        // Conversion from 1 Mb to B.
         private const int MbToB = 1000000;
+
+        // Buffer size (in byte)
+        private static int iBufferBytes = BufferSize * MbToB;
 
         /// <summary>
         /// Instance for playing audio bytes.
@@ -50,7 +56,7 @@ namespace Server
         /// <summary>
         /// In-memory stream to store data.
         /// </summary>
-        private static Queue<MemoryStream> _memoryStreams;
+        private static List<byte> _bytes;
 
         #endregion
         
@@ -61,7 +67,7 @@ namespace Server
             var iServerPort = GetServerPort();
 
             // Initialize memory stream.
-            _memoryStreams = new Queue<MemoryStream>();
+            _bytes = new List<byte>();
 
             // Initialize tcp listener.
             var tcpListener = new TcpListener(IPAddress.Any, iServerPort);
@@ -75,8 +81,7 @@ namespace Server
             // Buffered wave provider.
             _bufferedWaveProvider = new BufferedWaveProvider(new WaveFormat());
             _bufferedWaveProvider.DiscardOnBufferOverflow = true;
-            _bufferedWaveProvider.BufferLength = BufferSize * MbToB;
-            //_bufferedWaveProvider.ReadFully = false;
+            _bufferedWaveProvider.BufferLength = iBufferBytes;
             
             _waveOut = new WaveOut();
             _waveOut.Init(_bufferedWaveProvider);
@@ -89,7 +94,7 @@ namespace Server
                 var networkStream = _tcpClient.GetStream();
 
                 // Initalize buffer.
-                var buffer = new byte[BufferSize * MbToB];
+                var buffer = new byte[iBufferBytes];
 
                 // Number of bytes which have been read.
 
@@ -100,10 +105,14 @@ namespace Server
                         int iReadBytes;
                         while ((iReadBytes = networkStream.Read(buffer, 0, buffer.Length)) > 0)
                         {
-                            var memoryStream = new MemoryStream();
-                            memoryStream.Write(buffer, 0, iReadBytes);
-                            _memoryStreams.Enqueue(memoryStream);
-                            Console.WriteLine($"Read: {iReadBytes} bytes. Enqueue a stream. Count: {_memoryStreams.Count}");
+                            //var memoryStream = new MemoryStream();
+                            //memoryStream.Write(buffer, 0, iReadBytes);
+                            //_memoryStreams.Enqueue(memoryStream);
+                            //_memoryStream.CopyTo();
+                            //_memoryStream.Write(buffer, 0, iReadBytes);
+                            var realBytes = buffer.Take(iReadBytes).ToList();
+                            _bytes.AddRange(realBytes);
+                            Console.WriteLine($"Read: {iReadBytes} bytes. Enqueue a stream. Count: {realBytes.Count}");
                         }
                     }
                     catch (Exception ex)
@@ -124,27 +133,28 @@ namespace Server
 
                     // No byte is available in buffer. 
                     // Check memory stream to find available bytes array. If nothing found, terminate this thread.
-                    if (iRemainingBytes > 0)
-                    {
-                        //Console.WriteLine($"Remaining byte is {iRemainingBytes}");
+                    if (iRemainingBytes >= iBufferBytes)
                         continue;
-                    }
-
+                    
                     // No byte available.
-                    if (_memoryStreams.Count < 1)
+                    if (_bytes.Count < 1)
                     {
                         //Console.WriteLine("No data in memory stream");
                         continue;
                     }
 
                     // Get bytes array from memory stream.
-                    var bytes = new byte[BufferSize * MbToB];
-                    var memoryStream = _memoryStreams.Dequeue();
-                    memoryStream.Seek(0, SeekOrigin.Begin);
-                    var iReadBytes = memoryStream.Read(bytes, 0, bytes.Length);
-                    _bufferedWaveProvider.AddSamples(bytes, 0, iReadBytes);
-                    Console.WriteLine($"Wrote {iReadBytes} to buffer. Count: {_memoryStreams.Count}");
-                    Thread.Sleep(TimeSpan.FromSeconds(1));
+                    var iDifferent = iBufferBytes - iRemainingBytes;
+                    if (iDifferent > _bytes.Count)
+                        iDifferent = _bytes.Count;
+
+                    var bytes = _bytes.GetRange(0, iDifferent).ToArray();
+                    _bytes.RemoveRange(0, iDifferent);
+
+                    //var bytes = new byte[iBufferBytes];
+                    _bufferedWaveProvider.AddSamples(bytes, 0, bytes.Length);
+                    //Console.WriteLine($"Wrote {iReadBytes} to buffer. Count: {_memoryStream.Length}");
+                    //Thread.Sleep(TimeSpan.FromSeconds(1));
                     //_waveOut.Play();
                 }
             });
@@ -156,6 +166,13 @@ namespace Server
             _waveBufferCheckThread.Start();
 
             Console.ReadLine();
+
+            _tcpConnectionListeningThread.Abort();
+            _waveBufferCheckThread.Abort();
+            _bufferedWaveProvider.ClearBuffer();
+            _waveOut.Stop();
+            tcpListener.Stop();
+            
         }
 
         /// <summary>

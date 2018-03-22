@@ -105,6 +105,7 @@ namespace WavReadApp
             }
 
             Console.ReadLine();
+            
         }
     }
 }
